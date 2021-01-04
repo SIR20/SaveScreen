@@ -7,6 +7,12 @@ uses System.Windows.Forms, System.Drawing, System.Threading, System.Windows.Inpu
 function GetKeyState(key: integer): integer;
   external 'User32.dll' name 'GetAsyncKeyState';
 
+const
+  Ctrl = 17;
+  Shift = 16;
+  Key_S = 83;
+  Key_A = 65;
+
 begin
   var th_main: Thread;
   th_main := new Thread(() -> begin
@@ -16,12 +22,12 @@ begin
       var option := -1;
       while not flag do
       begin
-        if (GetKeyState(17) <> 0) and (GetKeyState(16) <> 0) and (GetKeyState(83) <> 0) then 
+        if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_S) <> 0) then 
         begin
           flag := true;
           option := 1;
         end;
-        if (GetKeyState(17) <> 0) and (GetKeyState(16) <> 0) and (GetKeyState(65) <> 0) then 
+        if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_A) <> 0) then 
         begin
           flag := true;
           option := 0;
