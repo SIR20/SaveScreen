@@ -79,6 +79,9 @@ begin
                   end;
                 end;
                 
+                if (e.Control) and (e.KeyCode = Keys.P) then
+                  Clipboard.SetImage(cimage);
+                
                 if (e.Control) and (e.KeyCode = Keys.Z) then
                 begin
                   redimage := new Bitmap(imagesv, imagesv.Width, imagesv.Height);
