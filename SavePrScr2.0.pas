@@ -1,6 +1,8 @@
 ﻿{$reference System.Windows.Forms.dll}
 {$reference System.Drawing.dll}
 
+{$title SaveScreen}
+
 {$apptype windows}
 uses System.Windows.Forms, System.Drawing, System.Threading, System.Windows.Input;
 
@@ -9,9 +11,16 @@ function GetKeyState(key: integer): integer;
 
 const
   Ctrl = 17;
+  PrtScreen = 44;
+  Escape = 27;
+  Alt = 262144;
   Shift = 16;
   Key_S = 83;
   Key_A = 65;
+  Key_Q = 81;
+
+//!!!!!!!!!!!!!!!!!!!!!!!!!Сделать справку при первом запуске
+//!!!!!!!!!!!!!!!!!!!!!!!!!Через реестры
 
 begin
   var th_main: Thread;
@@ -20,20 +29,61 @@ begin
     begin
       var flag := false;
       var option := -1;
+      var multy_screen := false;
+      var Images := new List<Image>;
       while not flag do
       begin
-        if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_S) <> 0) then 
-        begin
-          flag := true;
-          option := 1;
-        end;
-        if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_A) <> 0) then 
+        
+        if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_S) <> 0) then //Прямое сохранение файла
         begin
           flag := true;
           option := 0;
         end;
+        
+        if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_A) <> 0) then //Изменение файла
+        begin
+          flag := true;
+          option := 1;
+        end;
+        
+        if(GetKeyState(Ctrl) <> 0) and (GetKeyState(Key_Q) <> 0) then //Включение/Выключение мультискриншотного режима
+        begin
+          multy_screen := not multy_screen;
+          
+          var notif := new NotifyIcon;
+          notif.Icon := SystemIcons.Information;
+          notif.Visible := true;
+          
+          notif.BalloonTipClosed += (o, e)->
+          begin
+            notif.Visible := false;
+            notif.Dispose;
+          end;
+          
+          if multy_screen then  notif.BalloonTipText := 'Включен режим мультискриншотов'
+          else begin
+            notif.BalloonTipText := 'Режим мультискриншотов выключен';
+            option := 2;
+            flag := true;
+          end;
+          notif.ShowBalloonTip(3);
+          sleep(3000);
+          notif.Visible := false;
+        end;
+        
+        if(GetKeyState(PrtScreen) <> 0) then
+        begin
+          if multy_screen then
+          begin
+            var buff_image := Clipboard.GetImage;
+            if buff_image <> nil then Images.Add(buff_image);
+          end;
+        end;
+        
+        if(GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Escape) <> 0) then Thread.CurrentThread.Abort; //Завершение программы
         sleep(500);
       end;
+      
       var imagesv := Clipboard.GetImage;
       if imagesv <> nil then
       begin
@@ -41,7 +91,7 @@ begin
         f.StartPosition := FormStartPosition.CenterScreen;
         f.TopMost := true;
         case option of
-          1:
+          0:
             begin
               var save_dialog := new SaveFileDialog;
               save_dialog.FileName := 'image.jpg';
@@ -50,7 +100,7 @@ begin
                 DialogResult.OK: imagesv.Save(save_dialog.FileName);
               end;
             end;
-          0:
+          1:
             begin
               var redimage := new Bitmap(imagesv, imagesv.Width, imagesv.Height);
               var cimage: Bitmap;
@@ -136,8 +186,26 @@ begin
               
               Application.Run(f);
             end;
+          2:
+            begin
+              if Images.Count > 0 then 
+              begin
+                var FolderOpen := new FolderBrowserDialog;
+                case FolderOpen.ShowDialog of
+                  DialogResult.OK:
+                    begin
+                      var path := FolderOpen.SelectedPath;
+                      for var i := 0 to Images.Count - 1 do
+                      begin
+                        var image := Images[i];
+                        image.Save($'{path}\image{i}s.png');
+                      end;
+                    end;
+                end;
+              end;
+              Images.Clear;
+            end;
         end;
-        
       end;
     end;
   end);
