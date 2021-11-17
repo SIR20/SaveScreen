@@ -35,7 +35,6 @@ type
     
     public procedure ScreensSave(path: string);
     begin
-      WriteAllText('test.txt', Screens.Count.ToString);
       Screens.ForEach((i, j) -> ScreenSave($'{path}\image{j}.jpg', i));
       Screens.ForEach(i -> begin i.Dispose end);
     end;
@@ -54,7 +53,6 @@ function GetKeyState(key: integer): integer;
 function FileSaveDialog: string;
 begin
   var save_dialog := new SaveFileDialog;
-  var imf := new ImageFormat(System.Guid.Empty);
   save_dialog.FileName := 'image.jpg';
   save_dialog.Filter := 'JPG File(*.jpg)|*.jpg|PNG File(*.png)|*.png|Bitmap File(*.bmp)|*.bmp';
   case save_dialog.ShowDialog of
@@ -80,7 +78,7 @@ end;
 begin
   var th: Thread;
   th := new Thread(()->begin
-    
+    var screen_down := false;
     var Screen := new ScreenEditor;
     
     while true do
@@ -240,7 +238,9 @@ begin
         notif.Visible := false;
       end;
       
-      if(GetKeyState(PrtScreen) <> 0) then
+      if(GetKeyState(PrtScreen) <> 0) then screen_down := true;
+      
+      if(GetKeyState(PrtScreen) = 0) then 
       begin
         if Screen.MultyScreen then
         begin
@@ -248,10 +248,10 @@ begin
           if buff_image <> nil then Screen.ScreenAdd(buff_image);
         end;
       end;
+      
+      if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_E) <> 0) then Halt(0);//Завершение программы
     end;
-    
-    if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_E) <> 0) then Thread.CurrentThread.Abort; //Завершение программы
-    sleep(100);
+    sleep(50);
   end);
   th.ApartmentState := ApartmentState.STA;
   th.Start;
