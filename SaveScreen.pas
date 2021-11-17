@@ -242,10 +242,13 @@ begin
       
       if(GetKeyState(PrtScreen) = 0) then 
       begin
-        if Screen.MultyScreen then
-        begin
-          var buff_image := Clipboard.GetImage;
-          if buff_image <> nil then Screen.ScreenAdd(buff_image);
+        if screen_down then begin
+          if Screen.MultyScreen then
+          begin
+            var buff_image := Clipboard.GetImage;
+            if buff_image <> nil then Screen.ScreenAdd(buff_image);
+            screen_down := false;
+          end;
         end;
       end;
       
