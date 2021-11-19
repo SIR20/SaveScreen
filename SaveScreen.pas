@@ -4,7 +4,7 @@
 {$title SaveScreen}
 
 {$apptype windows}
-uses System.IO, System.Windows.Forms, System.Drawing, System.Drawing.Imaging, System.Threading, System.Windows.Input;
+uses System.IO, System.Windows.Forms, System.Drawing, System.Drawing.Imaging, System.Threading, System.Windows.Input, Microsoft.Win32;
 
 const
   Ctrl = 17;
@@ -16,6 +16,7 @@ const
   Key_A = 65;
   Key_Q = 81;
   Key_E = 69;
+  Key_D = 68;
 
 type
   ScreenEditor = class
@@ -75,12 +76,183 @@ begin
   Graphics.FromImage(Result).CopyFromScreen(0, 0, 0, 0, sz);
 end;
 
+procedure ShowHelper;
+begin
+  var f := new Form;
+  f.Width := 500;
+  f.Height := 300;
+  f.Text := 'Справка';
+  f.StartPosition := FormStartPosition.CenterScreen;
+  f.TopMost := true;
+  
+  var label_4 := new TextBox;
+  label_4.Left := 10;
+  label_4.Top := 10;
+  label_4.Width := f.Width;
+  label_4.BorderStyle := BorderStyle.None;
+  label_4.Enabled := false;
+  label_4.Text := 'Ctrl + Shift + E - Заершает работу программы.';
+  
+  var label_1 := new TextBox;
+  label_1.Left := 10;
+  label_1.Top := 40;
+  label_1.Width := f.Width;
+  label_1.BorderStyle := BorderStyle.None;
+  label_1.Enabled := false;
+  label_1.Text := 'Ctrl + Shift + S - Сохраняет скриншот по выбранному пути.';
+  
+  var label_2 := new TextBox;
+  label_2.Left := 10;
+  label_2.Top := 70;
+  label_2.Width := f.Width;
+  label_2.BorderStyle := BorderStyle.None;
+  label_2.Enabled := false;
+  label_2.Text := 'Ctrl + PrtScreen - Делает скриншот и позволяет обрезать скриншот,и сохраняет в буфер.';
+  
+  var label_3 := new TextBox;
+  label_3.Left := 10;
+  label_3.Top := 100;
+  label_3.Width := f.Width;
+  label_3.Height := 55;
+  label_3.BorderStyle := BorderStyle.None;
+  label_3.Enabled := false;
+  label_3.Text := $'Ctrl + Q - Включает/Выключает режим мультискриншотов{NewLine}(Возможность сделать несколько скриншотов подряд.После выключения этого режима выбираете куда сохранить).';
+  label_3.Multiline := true;
+  
+  f.Controls.Add(label_1);
+  f.Controls.Add(label_2);
+  f.Controls.Add(label_3);
+  f.Controls.Add(label_4);
+  Application.Run(f);
+end;
+
+procedure CutScreen(scr: Image);
+begin
+  var screenshot := scr;
+  {$region GitHub:Sun Serega}
+  var MainForm := new Form;
+  MainForm.FormBorderStyle := FormBorderStyle.None;
+  MainForm.WindowState := FormWindowState.Minimized;
+  MainForm.BackColor := Color.FromArgb(128, 128, 128);
+  MainForm.Opacity := 1 / 255;
+  MainForm.ShowInTaskbar := false;
+  
+  var SelectRectForm := new Form;
+  SelectRectForm.AddOwnedForm(MainForm);
+  SelectRectForm.AllowTransparency := true;
+  SelectRectForm.TransparencyKey := Color.Black;
+  SelectRectForm.BackColor := Color.Black;
+  SelectRectForm.FormBorderStyle := FormBorderStyle.None;
+  SelectRectForm.WindowState := FormWindowState.Minimized;
+  SelectRectForm.ShowInTaskbar := false;;
+  SelectRectForm.Shown += (o, e)->
+  begin
+    MainForm.WindowState := FormWindowState.Maximized;
+    SelectRectForm.WindowState := FormWindowState.Maximized;
+  end;
+  
+  var SelectRect := new PictureBox;
+  SelectRectForm.Controls.Add(SelectRect);
+  SelectRect.Dock := DockStyle.Fill;
+  
+  var p1: Point?;
+  var p2: Point?;
+  
+  MainForm.MouseDown += (o, e)->
+  begin
+    if e.Button = MouseButtons.Left then
+    begin
+      p1 := e.Location;
+      p2 := e.Location;
+    end else
+      p1 := nil;
+    SelectRect.Invalidate;
+  end;
+  
+  MainForm.MouseMove += (o, e)->
+  begin
+    if p1 = nil then exit;
+    p2 := e.Location;
+    SelectRect.Invalidate;
+  end;
+  
+  MainForm.MouseUp += (o, e)->
+  begin
+    if p1 = nil then exit;
+    p2 := e.Location;
+    
+    if e.Button = MouseButtons.Left then
+    begin
+      var x1 := p1.Value.X;
+      var y1 := p1.Value.Y;
+      var x2 := p2.Value.X;
+      var y2 := p2.Value.Y;
+      
+      if (Abs(x1 - x2) > 5) and (Abs(y1 - y2) > 5) then
+      begin
+        if x1 > x2 then Swap(x1, x2);
+        if y1 > y2 then Swap(y1, y2);
+        
+        var res := new Bitmap(x2 - x1, y2 - y1);
+        Graphics.FromImage(res).DrawImageUnscaledAndClipped(screenshot, new Rectangle(-x1, -y1, screenshot.Width, screenshot.Height));
+        Clipboard.SetImage(res);
+        MainForm.Close;
+        SelectRectForm.Close;
+      end;
+    end;
+    
+    p1 := nil;
+    SelectRect.Invalidate;
+  end;
+  
+  SelectRect.Paint += (o, e)->
+  begin
+    var gr := e.Graphics;
+    
+    var lp1 := p1;
+    var lp2 := p2;
+    
+    if (lp1 <> nil) and (lp2 <> nil) then
+    begin
+      var x1 := lp1.Value.X;
+      var y1 := lp1.Value.Y;
+      var x2 := lp2.Value.X;
+      var y2 := lp2.Value.Y;
+      
+      if (Abs(x1 - x2) > 5) and (Abs(y1 - y2) > 5) then
+      begin
+        if x1 > x2 then Swap(x1, x2);
+        if y1 > y2 then Swap(y1, y2);
+        gr.DrawRectangle(new Pen(Color.Red, 3), x1, y1, x2 - x1, y2 - y1);
+      end;
+      
+    end;
+    
+  end;
+  
+  SelectRectForm.Shown += (o, e)->
+  begin
+    var thr := new Thread(()->Application.Run(MainForm));
+    thr.ApartmentState := ApartmentState.STA;
+    thr.Start;
+  end;
+  Application.Run(SelectRectForm);
+  {$endregion GitHub:Sun Serega}
+end;
+
 begin
   var th: Thread;
   th := new Thread(()->begin
     var screen_down := false;
     var Screen := new ScreenEditor;
-    
+    var sft := Registry.CurrentUser.OpenSubKey('SOFTWARE', true);
+    var reg_save := sft.CreateSubKey('SaveScreen');
+    var res := reg_save.GetValue('Open');
+    if res = nil then
+    begin
+      ShowHelper;
+      reg_save.SetValue('Open', true)
+    end;
     while true do
     begin
       if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_S) <> 0) then //Прямое сохранение файла
@@ -94,119 +266,7 @@ begin
         end;
       end;
       
-      if (GetKeyState(Ctrl) <> 0) and (GetKeyState(PrtScreen) <> 0) then //Изменение Скриншота
-      begin
-        var screenshot := MakeScreenShot;
-        {$region GitHub:Sun Serega}
-        var MainForm := new Form;
-        MainForm.FormBorderStyle := FormBorderStyle.None;
-        MainForm.WindowState := FormWindowState.Minimized;
-        MainForm.BackColor := Color.FromArgb(128, 128, 128);
-        MainForm.Opacity := 1 / 255;
-        MainForm.ShowInTaskbar := false;
-        
-        var SelectRectForm := new Form;
-        SelectRectForm.AddOwnedForm(MainForm);
-        SelectRectForm.AllowTransparency := true;
-        SelectRectForm.TransparencyKey := Color.Black;
-        SelectRectForm.BackColor := Color.Black;
-        SelectRectForm.FormBorderStyle := FormBorderStyle.None;
-        SelectRectForm.WindowState := FormWindowState.Minimized;
-        SelectRectForm.ShowInTaskbar := false;;
-        SelectRectForm.Shown += (o, e)->
-        begin
-          MainForm.WindowState := FormWindowState.Maximized;
-          SelectRectForm.WindowState := FormWindowState.Maximized;
-        end;
-        
-        var SelectRect := new PictureBox;
-        SelectRectForm.Controls.Add(SelectRect);
-        SelectRect.Dock := DockStyle.Fill;
-        
-        var p1: Point?;
-        var p2: Point?;
-        
-        MainForm.MouseDown += (o, e)->
-        begin
-          if e.Button = MouseButtons.Left then
-          begin
-            p1 := e.Location;
-            p2 := e.Location;
-          end else
-            p1 := nil;
-          SelectRect.Invalidate;
-        end;
-        
-        MainForm.MouseMove += (o, e)->
-        begin
-          if p1 = nil then exit;
-          p2 := e.Location;
-          SelectRect.Invalidate;
-        end;
-        
-        MainForm.MouseUp += (o, e)->
-        begin
-          if p1 = nil then exit;
-          p2 := e.Location;
-          
-          if e.Button = MouseButtons.Left then
-          begin
-            var x1 := p1.Value.X;
-            var y1 := p1.Value.Y;
-            var x2 := p2.Value.X;
-            var y2 := p2.Value.Y;
-            
-            if (Abs(x1 - x2) > 5) and (Abs(y1 - y2) > 5) then
-            begin
-              if x1 > x2 then Swap(x1, x2);
-              if y1 > y2 then Swap(y1, y2);
-              
-              var res := new Bitmap(x2 - x1, y2 - y1);
-              Graphics.FromImage(res).DrawImageUnscaledAndClipped(screenshot, new Rectangle(-x1, -y1, screenshot.Width, screenshot.Height));
-              Clipboard.SetImage(res);
-              MainForm.Close;
-              SelectRectForm.Close;
-            end;
-          end;
-          
-          p1 := nil;
-          SelectRect.Invalidate;
-        end;
-        
-        SelectRect.Paint += (o, e)->
-        begin
-          var gr := e.Graphics;
-          
-          var lp1 := p1;
-          var lp2 := p2;
-          
-          if (lp1 <> nil) and (lp2 <> nil) then
-          begin
-            var x1 := lp1.Value.X;
-            var y1 := lp1.Value.Y;
-            var x2 := lp2.Value.X;
-            var y2 := lp2.Value.Y;
-            
-            if (Abs(x1 - x2) > 5) and (Abs(y1 - y2) > 5) then
-            begin
-              if x1 > x2 then Swap(x1, x2);
-              if y1 > y2 then Swap(y1, y2);
-              gr.DrawRectangle(new Pen(Color.Red, 3), x1, y1, x2 - x1, y2 - y1);
-            end;
-            
-          end;
-          
-        end;
-        
-        SelectRectForm.Shown += (o, e)->
-        begin
-          var thr := new Thread(()->Application.Run(MainForm));
-          thr.ApartmentState := ApartmentState.STA;
-          thr.Start;
-        end;
-        Application.Run(SelectRectForm);
-        {$endregion GitHub:Sun Serega}
-      end;
+      if (GetKeyState(Ctrl) <> 0) and (GetKeyState(PrtScreen) <> 0) then CutScreen(MakeScreenShot);//Изменение Скриншота
       
       if(GetKeyState(Ctrl) <> 0) and (GetKeyState(Key_Q) <> 0) then //Включение/Выключение мультискриншотного режима
       begin
@@ -251,6 +311,8 @@ begin
           end;
         end;
       end;
+      
+      if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_D) <> 0) then ShowHelper;//Справочник
       
       if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_E) <> 0) then Halt(0);//Завершение программы
     end;
