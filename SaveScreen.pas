@@ -36,7 +36,7 @@ type
     
     public procedure ScreensSave(path: string);
     begin
-      Screens.ForEach((i, j) -> ScreenSave($'{path}\image{j}.jpg', i));
+      Screens.ForEach((i, j) -> ScreenSave($'{path}\images{j}.jpg', i));
       Screens.ForEach(i -> begin i.Dispose end);
     end;
     
@@ -126,7 +126,7 @@ begin
   Application.Run(f);
 end;
 
-procedure CutScreen(scr: Image);
+procedure CutScreen(scr: Image; s: ScreenEditor; to_memory: boolean := true);
 begin
   var screenshot := scr;
   {$region GitHub:Sun Serega}
@@ -145,7 +145,7 @@ begin
   SelectRectForm.FormBorderStyle := FormBorderStyle.None;
   SelectRectForm.WindowState := FormWindowState.Minimized;
   SelectRectForm.ShowInTaskbar := false;
-  MainForm.Cursor:=Cursors.Cross;
+  MainForm.Cursor := Cursors.Cross;
   SelectRectForm.Shown += (o, e)->
   begin
     MainForm.WindowState := FormWindowState.Maximized;
@@ -196,7 +196,10 @@ begin
         
         var res := new Bitmap(x2 - x1, y2 - y1);
         Graphics.FromImage(res).DrawImageUnscaledAndClipped(screenshot, new Rectangle(-x1, -y1, screenshot.Width, screenshot.Height));
-        Clipboard.SetImage(res);
+        if to_memory then
+          Clipboard.SetImage(res)
+        else
+          s.ScreenAdd(res);
         MainForm.Close;
         SelectRectForm.Close;
       end;
@@ -241,6 +244,9 @@ begin
   {$endregion GitHub:Sun Serega}
 end;
 
+const
+  time = 3000;
+
 begin
   var th: Thread;
   th := new Thread(()->begin
@@ -254,6 +260,21 @@ begin
       ShowHelper;
       reg_save.SetValue('Open', true)
     end;
+    
+    var start_notif := new NotifyIcon;
+    start_notif.Icon := SystemIcons.Information;
+    start_notif.Visible := true;
+    
+    start_notif.BalloonTipClosed += (o, e)->
+    begin
+      start_notif.Visible := false;
+      start_notif.Dispose;
+    end;
+    
+    start_notif.BalloonTipText := 'SaveScreen готов к работе';
+    start_notif.ShowBalloonTip(Round(time / 1000));
+    sleep(time);
+    start_notif.Visible := false;
     while true do
     begin
       if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_S) <> 0) then //Прямое сохранение файла
@@ -267,7 +288,13 @@ begin
         end;
       end;
       
-      if (GetKeyState(Ctrl) <> 0) and (GetKeyState(PrtScreen) <> 0) then CutScreen(MakeScreenShot);//Изменение Скриншота
+      if (GetKeyState(Ctrl) <> 0) and (GetKeyState(PrtScreen) <> 0) then //Изменение Скриншота
+      begin
+        if Screen.MultyScreen then
+          CutScreen(MakeScreenShot, screen, false)
+        else
+          CutScreen(MakeScreenShot, screen);
+      end;
       
       if(GetKeyState(Ctrl) <> 0) and (GetKeyState(Key_Q) <> 0) then //Включение/Выключение мультискриншотного режима
       begin
@@ -294,14 +321,14 @@ begin
             Screen.ScreensClear;
           end;
         end;
-        notif.ShowBalloonTip(3);
-        sleep(3000);
+        notif.ShowBalloonTip(Round(time / 1000));
+        sleep(time);
         notif.Visible := false;
       end;
       
-      if(GetKeyState(PrtScreen) <> 0) then screen_down := true;
+      if(GetKeyState(PrtScreen) <> 0) then screen_down := true;//1
       
-      if(GetKeyState(PrtScreen) = 0) then 
+      if(GetKeyState(PrtScreen) = 0) then //1 Скриншот
       begin
         if screen_down then begin
           if Screen.MultyScreen then
@@ -315,9 +342,26 @@ begin
       
       if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_D) <> 0) then ShowHelper;//Справочник
       
-      if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_E) <> 0) then Halt(0);//Завершение программы
+      if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_E) <> 0) then 
+      begin
+        var end_notif := new NotifyIcon;
+        end_notif.Icon := SystemIcons.Information;
+        end_notif.Visible := true;
+        
+        end_notif.BalloonTipClosed += (o, e)->
+        begin
+          end_notif.Visible := false;
+          end_notif.Dispose;
+        end;
+        
+        end_notif.BalloonTipText := 'Закрытие SaveScreen';
+        end_notif.ShowBalloonTip(Round(time / 1000));
+        sleep(time);
+        end_notif.Visible := false;
+        Halt(0);   
+      end;
+      sleep(50);
     end;
-    sleep(50);
   end);
   th.ApartmentState := ApartmentState.STA;
   th.Start;
