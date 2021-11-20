@@ -144,7 +144,8 @@ begin
   SelectRectForm.BackColor := Color.Black;
   SelectRectForm.FormBorderStyle := FormBorderStyle.None;
   SelectRectForm.WindowState := FormWindowState.Minimized;
-  SelectRectForm.ShowInTaskbar := false;;
+  SelectRectForm.ShowInTaskbar := false;
+  MainForm.Cursor:=Cursors.Cross;
   SelectRectForm.Shown += (o, e)->
   begin
     MainForm.WindowState := FormWindowState.Maximized;
