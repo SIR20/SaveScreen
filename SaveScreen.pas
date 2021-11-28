@@ -4,7 +4,7 @@
 {$title SaveScreen}
 
 {$apptype windows}
-uses System.IO, System.Windows.Forms, System.Drawing, System.Drawing.Imaging, System.Threading, System.Windows.Input, Microsoft.Win32;
+uses System.IO, System.Windows.Forms, System.Drawing, System.Drawing.Imaging, System.Threading, System.Windows.Input, Microsoft.Win32, System.Timers;
 
 const
   Ctrl = 17;
@@ -74,6 +74,7 @@ begin
   var sz := Screen.PrimaryScreen.Bounds.Size;
   Result := new Bitmap(sz.Width, sz.Height);
   Graphics.FromImage(Result).CopyFromScreen(0, 0, 0, 0, sz);
+  Result.Save('test_image.jpg');
 end;
 
 procedure ShowHelper;
@@ -251,6 +252,9 @@ begin
   var th: Thread;
   th := new Thread(()->begin
     var screen_down := false;
+    var multy_down := false;
+    var editor_down := false;
+    var save_down := false;
     var Screen := new ScreenEditor;
     var sft := Registry.CurrentUser.OpenSubKey('SOFTWARE', true);
     var reg_save := sft.CreateSubKey('SaveScreen');
@@ -264,20 +268,29 @@ begin
     var start_notif := new NotifyIcon;
     start_notif.Icon := SystemIcons.Information;
     start_notif.Visible := true;
+    start_notif.BalloonTipText := 'SaveScreen готов к работе';
     
     start_notif.BalloonTipClosed += (o, e)->
     begin
       start_notif.Visible := false;
       start_notif.Dispose;
-    end;
+    end;   
     
-    start_notif.BalloonTipText := 'SaveScreen готов к работе';
     start_notif.ShowBalloonTip(Round(time / 1000));
-    sleep(time);
-    start_notif.Visible := false;
+    var t := new System.Timers.Timer(time);
+    t.AutoReset := false;
+    t.Elapsed += (o, e)-> begin
+      start_notif.Visible := false;
+      t.Stop;
+      t.Close;
+      t.Dispose;
+    end;
+    t.Start;
+    
     while true do
     begin
-      if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_S) <> 0) then //Прямое сохранение файла
+      if(GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_S) <> 0) then save_down := true;//0
+      if(GetKeyState(Ctrl) = 0) and (GetKeyState(Shift) = 0) and (GetKeyState(Key_S) = 0) and save_down then//0:Прямое сохранение файла
       begin
         var img := Clipboard.GetImage;
         if img <> nil then
@@ -286,17 +299,27 @@ begin
           if path.Length > 0 then
             Screen.ScreenSave(path, img);
         end;
+        save_down := false;
       end;
       
-      if (GetKeyState(Ctrl) <> 0) and (GetKeyState(PrtScreen) <> 0) then //Изменение Скриншота
+      if(GetKeyState(Ctrl) <> 0) and (GetKeyState(PrtScreen) <> 0) then editor_down := true;//1
+      if(GetKeyState(Ctrl) = 0) and (GetKeyState(PrtScreen) = 0) then//1:Изменение Скриншота
       begin
-        if Screen.MultyScreen then
-          CutScreen(MakeScreenShot, screen, false)
-        else
-          CutScreen(MakeScreenShot, screen);
+        if editor_down then
+        begin
+          if Screen.MultyScreen then
+          begin
+            CutScreen(MakeScreenShot, screen, false);
+            $'{Screen.ScreensCount}-1'.Println
+          end
+          else
+            CutScreen(MakeScreenShot, screen);
+          editor_down := false
+        end;
       end;
       
-      if(GetKeyState(Ctrl) <> 0) and (GetKeyState(Key_Q) <> 0) then //Включение/Выключение мультискриншотного режима
+      if(GetKeyState(Ctrl) <> 0) and (GetKeyState(Key_Q) <> 0) then multy_down := true;//2
+      if(GetKeyState(Ctrl) = 0) and (GetKeyState(Key_Q) = 0) and (multy_down) then//2:Включение/Выключение мультискриншотного режима
       begin
         Screen.MultyScreen := not Screen.MultyScreen;
         
@@ -322,22 +345,31 @@ begin
           end;
         end;
         notif.ShowBalloonTip(Round(time / 1000));
-        sleep(time);
-        notif.Visible := false;
+        t := new System.Timers.Timer(time);
+        t.AutoReset := false;
+        t.Elapsed += (o, e)-> begin
+          start_notif.Visible := false;
+          t.Stop;
+          t.Close;
+          t.Dispose;
+        end;
+        t.Start;
+        multy_down := false;
       end;
       
-      if(GetKeyState(PrtScreen) <> 0) then screen_down := true;//1
       
-      if(GetKeyState(PrtScreen) = 0) then //1 Скриншот
+      
+      /////////////////////////////!!!!!!!!!!!!!!!!!!!!!!!Два скриншота делается из-за нажатия PrtScreen в обоих случаях.Нужно сделать проверку на один запуск одного из действий
+      if(GetKeyState(PrtScreen) <> 0) and (GetKeyState(Ctrl) = 0) then screen_down := true;//1
+      if((GetKeyState(PrtScreen) = 0) and screen_down) then //1:Скриншот
       begin
-        if screen_down then begin
-          if Screen.MultyScreen then
-          begin
-            var buff_image := Clipboard.GetImage;
-            if buff_image <> nil then Screen.ScreenAdd(buff_image);
-            screen_down := false;
-          end;
+        if Screen.MultyScreen then
+        begin
+          var buff_image := Clipboard.GetImage;
+          if buff_image <> nil then Screen.ScreenAdd(buff_image);
+          $'{Screen.ScreensCount}-2'.Println
         end;
+        screen_down := false;
       end;
       
       if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_D) <> 0) then ShowHelper;//Справочник
@@ -356,8 +388,15 @@ begin
         
         end_notif.BalloonTipText := 'Закрытие SaveScreen';
         end_notif.ShowBalloonTip(Round(time / 1000));
-        sleep(time);
-        end_notif.Visible := false;
+        t := new System.Timers.Timer(time);
+        t.AutoReset := false;
+        t.Elapsed += (o, e)-> begin
+          end_notif.Visible := false;
+          t.Stop;
+          t.Close;
+          t.Dispose;
+        end;
+        t.Start;
         Halt(0);   
       end;
       sleep(50);
