@@ -4,7 +4,7 @@
 {$title SaveScreen}
 
 {$apptype windows}
-uses System.IO, System.Windows.Forms, System.Drawing, System.Drawing.Imaging, System.Threading, System.Windows.Input, Microsoft.Win32, System.Timers;
+uses System.IO, System.Windows.Forms, System.Drawing, System.Drawing.Imaging, System.Threading, System.Windows.Input, Microsoft.Win32, System.Timers, System.Diagnostics;
 
 const
   Ctrl = 17;
@@ -247,8 +247,14 @@ end;
 
 const
   time = 3000;
+  mutex_name = 'ID=1.SaveScreen.exe';
 
 begin
+  var open_flag := false;
+  var mute_x := new Mutex(true, mutex_name, open_flag);
+  if not open_flag then
+    halt(0);
+  MessageBox.Show('123123');
   var th: Thread;
   th := new Thread(()->begin
     var screen_down := false;
