@@ -254,7 +254,7 @@ begin
   var mute_x := new Mutex(true, mutex_name, open_flag);
   if not open_flag then
     halt(0);
-  MessageBox.Show('123123');
+    
   var th: Thread;
   th := new Thread(()->begin
     var screen_down := false;
@@ -316,7 +316,6 @@ begin
           if Screen.MultyScreen then
           begin
             CutScreen(MakeScreenShot, screen, false);
-            $'{Screen.ScreensCount}-1'.Println
           end
           else
             CutScreen(MakeScreenShot, screen);
