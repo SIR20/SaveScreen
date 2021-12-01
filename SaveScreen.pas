@@ -5,6 +5,8 @@
 
 {$apptype windows}
 uses System.IO, System.Windows.Forms, System.Drawing, System.Drawing.Imaging, System.Threading, System.Windows.Input, Microsoft.Win32, System.Timers, System.Diagnostics;
+uses System.IO.Pipes;
+uses System.Text;
 
 const
   Ctrl = 17;
@@ -51,7 +53,8 @@ type
 function GetKeyState(key: integer): integer;
   external 'User32.dll' name 'GetAsyncKeyState';
 
-function FileSaveDialog: string;
+///Выбор файла для сохранения скриншота
+function FileSaveDialog: string;//Выбор файла для сохранения скриншота
 begin
   var save_dialog := new SaveFileDialog;
   save_dialog.FileName := 'image.jpg';
@@ -61,7 +64,8 @@ begin
   end;
 end;
 
-function FolderOpenDialog: string;
+///Выбор папки для сохранения скриншотов
+function FolderOpenDialog: string;//Выбор папки для сохранения скриншотов
 begin
   var FolderOpen := new FolderBrowserDialog;
   case FolderOpen.ShowDialog of
@@ -69,15 +73,16 @@ begin
   end;
 end;
 
-function MakeScreenShot: Bitmap;
+///Создание скриншота
+function MakeScreenShot: Bitmap;//Создание скриншота
 begin
   var sz := Screen.PrimaryScreen.Bounds.Size;
   Result := new Bitmap(sz.Width, sz.Height);
   Graphics.FromImage(Result).CopyFromScreen(0, 0, 0, 0, sz);
-  Result.Save('test_image.jpg');
 end;
 
-procedure ShowHelper;
+///Форма - справочник
+procedure ShowHelper;//Форма - справочник
 begin
   var f := new Form;
   f.Width := 500;
@@ -127,10 +132,12 @@ begin
   Application.Run(f);
 end;
 
-procedure CutScreen(scr: Image; s: ScreenEditor; to_memory: boolean := true);
+///Открывает форму для обрезки скришота
+procedure CutScreen(scr: Image; s: ScreenEditor; to_memory: boolean := true);//Открывает форму для обрезки скришота
 begin
   var screenshot := scr;
-  {$region GitHub:Sun Serega}
+  
+  {$region GitHub:SunSerega}
   var MainForm := new Form;
   MainForm.FormBorderStyle := FormBorderStyle.None;
   MainForm.WindowState := FormWindowState.Minimized;
@@ -242,33 +249,161 @@ begin
     thr.Start;
   end;
   Application.Run(SelectRectForm);
-  {$endregion GitHub:Sun Serega}
+  {$endregion GitHub:SunSerega}
+end;
+
+///Сохраняет скришот
+procedure SaveImage(scr: ScreenEditor);//Сохраняет скришот
+begin
+  var img := Clipboard.GetImage;
+  if img <> nil then
+  begin
+    var path := FileSaveDialog;
+    if path.Length > 0 then
+      scr.ScreenSave(path, img);
+  end;
+end;
+
+///Включает/Выключает режим мультискриншотов
+procedure MultyScreen(Screen_s: ScreenEditor; time: integer);//Включает/Выключает режим мультискриншотов
+begin
+  Screen_s.MultyScreen := not Screen_s.MultyScreen;
+  
+  var multy_notif := new NotifyIcon;
+  multy_notif.Icon := SystemIcons.Information;
+  multy_notif.Visible := true;
+  
+  multy_notif.BalloonTipClosed += (o, e)->
+  begin
+    multy_notif.Visible := false;
+    multy_notif.Dispose;
+  end;
+  
+  if Screen_s.MultyScreen then 
+    multy_notif.BalloonTipText := 'Включен режим мультискриншотов'
+  else begin
+    multy_notif.BalloonTipText := 'Режим мультискриншотов выключен';
+    if Screen_s.ScreensCount > 0 then
+    begin
+      var path := FolderOpenDialog;
+      if path.Length > 0 then
+        Screen_s.ScreensSave(path);
+      Screen_s.ScreensClear;
+    end;
+  end;
+  multy_notif.ShowBalloonTip(Round(time / 1000));
+  var t := new System.Timers.Timer(time);
+  t.AutoReset := false;
+  t.Elapsed += (o, e)-> begin
+    multy_notif.Visible := false;
+    t.Stop;
+    t.Close;
+    t.Dispose;
+  end;
+  t.Start;
+end;
+
+///Закрывает программу
+procedure CloseSaveScreen(time: integer);//Закрывает программу
+begin
+  var end_notif := new NotifyIcon;
+  end_notif.Icon := SystemIcons.Information;
+  end_notif.Visible := true;
+  
+  end_notif.BalloonTipClosed += (o, e)->
+  begin
+    end_notif.Visible := false;
+    end_notif.Dispose;
+  end;
+  
+  end_notif.BalloonTipText := 'Закрытие SaveScreen';
+  end_notif.ShowBalloonTip(Round(time / 1000));
+  var t := new System.Timers.Timer(time);
+  t.AutoReset := false;
+  t.Elapsed += (o, e)-> begin
+    end_notif.Visible := false;
+    t.Stop;
+    t.Close;
+    t.Dispose;
+  end;
+  t.Start;
+  System.Diagnostics.Process.GetCurrentProcess().Kill();
 end;
 
 const
   time = 3000;
   mutex_name = 'ID=1.SaveScreen.exe';
+  pipe_name = 'SIR\SaveScreen\ID=1';
 
 begin
   var open_flag := false;
   var mute_x := new Mutex(true, mutex_name, open_flag);
-  if not open_flag then
-    halt(0);
+  if not open_flag then //Если программа уже запущена
+  begin
+    if ParamCount = 0
+      then System.Diagnostics.Process.GetCurrentProcess().Kill();
     
+    var arg := ParamStr(1);
+    
+    var PipeClient := new NamedPipeClientStream(pipe_name);
+    PipeClient.Connect;
+    var msg := Encoding.UTF8.GetBytes(arg + '&');
+    PipeClient.Write(msg, 0, msg.Length);
+    System.Diagnostics.Process.GetCurrentProcess().Kill();
+  end;
+  
   var th: Thread;
   th := new Thread(()->begin
+    var Screen_s := new ScreenEditor;
+    
+    var listen_thread: Thread;
+    listen_thread := new Thread(()->begin
+      var PipeServer := new NamedPipeServerStream(pipe_name);
+      var data: array of char;
+      var sr: StreamReader;
+      var msg: string;
+      while true do
+      begin
+        PipeServer.WaitForConnection;
+        data := new char[20];
+        sr := new StreamReader(PipeServer);
+        while true do 
+        begin
+          sr.ReadBlock(data, 0, data.Length);
+          msg += data.JoinToString;
+          if data.LastIndexOf('&') > 0 then
+            break;
+        end;
+        PipeServer.Disconnect;
+        
+        msg := msg.Remove(msg.IndexOf('&'));
+        case  msg of
+          'CreateCutScreen': CutScreen(MakeScreenShot, Screen_s, not Screen_s.MultyScreen);
+          'SaveScreen': SaveImage(Screen_s);
+          'MultyScreen': MultyScreen(Screen_s, time);
+          'CloseApp': CloseSaveScreen(time);
+        end;
+        msg := '';
+      end;
+    end);
+    listen_thread.ApartmentState := ApartmentState.STA;
+    listen_thread.Start;
+    
     var screen_down := false;
     var multy_down := false;
     var editor_down := false;
     var save_down := false;
-    var Screen := new ScreenEditor;
-    var sft := Registry.CurrentUser.OpenSubKey('SOFTWARE', true);
-    var reg_save := sft.CreateSubKey('SaveScreen');
-    var res := reg_save.GetValue('Open');
-    if res = nil then
-    begin
-      ShowHelper;
-      reg_save.SetValue('Open', true)
+    
+    try
+      var sft := Registry.CurrentUser.OpenSubKey('SOFTWARE', true);
+      var reg_save := sft.CreateSubKey('SaveScreen');
+      var res := reg_save.GetValue('Open');
+      if res = nil then
+      begin
+        ShowHelper;
+        reg_save.SetValue('Open', true)
+      end;
+    except
     end;
     
     var start_notif := new NotifyIcon;
@@ -295,115 +430,46 @@ begin
     
     while true do
     begin
+      
       if(GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_S) <> 0) then save_down := true;//0
       if(GetKeyState(Ctrl) = 0) and (GetKeyState(Shift) = 0) and (GetKeyState(Key_S) = 0) and save_down then//0:Прямое сохранение файла
       begin
-        var img := Clipboard.GetImage;
-        if img <> nil then
-        begin
-          var path := FileSaveDialog;
-          if path.Length > 0 then
-            Screen.ScreenSave(path, img);
-        end;
+        SaveImage(Screen_s);
         save_down := false;
       end;
       
       if(GetKeyState(Ctrl) <> 0) and (GetKeyState(PrtScreen) <> 0) then editor_down := true;//1
-      if(GetKeyState(Ctrl) = 0) and (GetKeyState(PrtScreen) = 0) then//1:Изменение Скриншота
+      if(GetKeyState(Ctrl) = 0) and (GetKeyState(PrtScreen) = 0) and editor_down then//1:Изменение Скриншота
       begin
-        if editor_down then
-        begin
-          if Screen.MultyScreen then
-          begin
-            CutScreen(MakeScreenShot, screen, false);
-          end
-          else
-            CutScreen(MakeScreenShot, screen);
-          editor_down := false
-        end;
+        if Screen_s.MultyScreen then
+          CutScreen(MakeScreenShot, Screen_s, false)
+        else
+          CutScreen(MakeScreenShot, Screen_s);
+        editor_down := false
       end;
       
       if(GetKeyState(Ctrl) <> 0) and (GetKeyState(Key_Q) <> 0) then multy_down := true;//2
-      if(GetKeyState(Ctrl) = 0) and (GetKeyState(Key_Q) = 0) and (multy_down) then//2:Включение/Выключение мультискриншотного режима
+      if(GetKeyState(Ctrl) = 0) and (GetKeyState(Key_Q) = 0) and multy_down then//2:Включение/Выключение мультискриншотного режима
       begin
-        Screen.MultyScreen := not Screen.MultyScreen;
-        
-        var notif := new NotifyIcon;
-        notif.Icon := SystemIcons.Information;
-        notif.Visible := true;
-        
-        notif.BalloonTipClosed += (o, e)->
-        begin
-          notif.Visible := false;
-          notif.Dispose;
-        end;
-        
-        if Screen.MultyScreen then  notif.BalloonTipText := 'Включен режим мультискриншотов'
-        else begin
-          notif.BalloonTipText := 'Режим мультискриншотов выключен';
-          if Screen.ScreensCount > 0 then
-          begin
-            var path := FolderOpenDialog;
-            if path.Length > 0 then
-              Screen.ScreensSave(path);
-            Screen.ScreensClear;
-          end;
-        end;
-        notif.ShowBalloonTip(Round(time / 1000));
-        t := new System.Timers.Timer(time);
-        t.AutoReset := false;
-        t.Elapsed += (o, e)-> begin
-          start_notif.Visible := false;
-          t.Stop;
-          t.Close;
-          t.Dispose;
-        end;
-        t.Start;
+        MultyScreen(Screen_s, time);
         multy_down := false;
       end;
       
-      
-      
-      /////////////////////////////!!!!!!!!!!!!!!!!!!!!!!!Два скриншота делается из-за нажатия PrtScreen в обоих случаях.Нужно сделать проверку на один запуск одного из действий
       if(GetKeyState(PrtScreen) <> 0) and (GetKeyState(Ctrl) = 0) then screen_down := true;//1
       if((GetKeyState(PrtScreen) = 0) and screen_down) then //1:Скриншот
       begin
-        if Screen.MultyScreen then
+        if Screen_s.MultyScreen then
         begin
           var buff_image := Clipboard.GetImage;
-          if buff_image <> nil then Screen.ScreenAdd(buff_image);
-          $'{Screen.ScreensCount}-2'.Println
+          if buff_image <> nil then Screen_s.ScreenAdd(buff_image);
         end;
         screen_down := false;
       end;
       
       if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_D) <> 0) then ShowHelper;//Справочник
       
-      if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_E) <> 0) then 
-      begin
-        var end_notif := new NotifyIcon;
-        end_notif.Icon := SystemIcons.Information;
-        end_notif.Visible := true;
-        
-        end_notif.BalloonTipClosed += (o, e)->
-        begin
-          end_notif.Visible := false;
-          end_notif.Dispose;
-        end;
-        
-        end_notif.BalloonTipText := 'Закрытие SaveScreen';
-        end_notif.ShowBalloonTip(Round(time / 1000));
-        t := new System.Timers.Timer(time);
-        t.AutoReset := false;
-        t.Elapsed += (o, e)-> begin
-          end_notif.Visible := false;
-          t.Stop;
-          t.Close;
-          t.Dispose;
-        end;
-        t.Start;
-        Halt(0);   
-      end;
+      if (GetKeyState(Ctrl) <> 0) and (GetKeyState(Shift) <> 0) and (GetKeyState(Key_E) <> 0) then CloseSaveScreen(time);
+      
       sleep(50);
     end;
   end);
