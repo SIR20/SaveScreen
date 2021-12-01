@@ -352,6 +352,9 @@ begin
     System.Diagnostics.Process.GetCurrentProcess().Kill();
   end;
   
+  if ParamCount > 0 then
+    System.Diagnostics.Process.GetCurrentProcess().Kill();
+    
   var th: Thread;
   th := new Thread(()->begin
     var Screen_s := new ScreenEditor;
