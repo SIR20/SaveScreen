@@ -137,7 +137,6 @@ procedure CutScreen(scr: Image; s: ScreenEditor; to_memory: boolean := true);//�
 begin
   var screenshot := scr;
   
-  {$region GitHub:SunSerega}
   var MainForm := new Form;
   MainForm.FormBorderStyle := FormBorderStyle.None;
   MainForm.WindowState := FormWindowState.Minimized;
@@ -249,7 +248,6 @@ begin
     thr.Start;
   end;
   Application.Run(SelectRectForm);
-  {$endregion GitHub:SunSerega}
 end;
 
 ///Сохраняет скришот
