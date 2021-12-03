@@ -137,6 +137,7 @@ procedure CutScreen(scr: Image; s: ScreenEditor; to_memory: boolean := true);//�
 begin
   var screenshot := scr;
   
+  {$region GitHub:SunSerega}
   var MainForm := new Form;
   MainForm.FormBorderStyle := FormBorderStyle.None;
   MainForm.WindowState := FormWindowState.Minimized;
@@ -248,6 +249,7 @@ begin
     thr.Start;
   end;
   Application.Run(SelectRectForm);
+  {$endregion GitHub:SunSerega}
 end;
 
 ///Сохраняет скришот
@@ -329,7 +331,7 @@ begin
 end;
 
 const
-  time = 3000;
+  time = 1000;
   mutex_name = 'ID=1.SaveScreen.exe';
   pipe_name = 'SIR\SaveScreen\ID=1';
 
@@ -352,7 +354,7 @@ begin
   
   if ParamCount > 0 then
     System.Diagnostics.Process.GetCurrentProcess().Kill();
-    
+  
   var th: Thread;
   th := new Thread(()->begin
     var Screen_s := new ScreenEditor;
@@ -412,23 +414,45 @@ begin
     start_notif.Visible := true;
     start_notif.BalloonTipText := 'SaveScreen готов к работе';
     
-    start_notif.BalloonTipClosed += (o, e)->
-    begin
-      start_notif.Visible := false;
-      start_notif.Dispose;
-    end;   
+    var ctx_menu := new ContextMenuStrip;
+    
+    var create_cut_screen := new ToolStripMenuItem('Сделать обрезаемый скриншот');
+    create_cut_screen.Click += (o, e)-> begin
+      CutScreen(MakeScreenShot, Screen_s, not Screen_s.MultyScreen);
+    end;
+    
+    var save_screen := new ToolStripMenuItem('Сохранить скриншот');
+    save_screen.Click += (o, e)-> begin
+      SaveImage(Screen_s);
+    end;
+    
+    var set_multy_screen := new ToolStripMenuItem('Включить/Выключить мультискриншот');
+    set_multy_screen.Click += (o, e)-> begin
+      MultyScreen(Screen_s, time);
+    end;
+    
+    var close_app := new ToolStripMenuItem('Закрыть приложение');
+    close_app.Click += (o, e)-> begin
+      CloseSaveScreen(time);
+    end;
+    
+    ctx_menu.Items.Add(create_cut_screen);
+    ctx_menu.Items.Add(save_screen);
+    ctx_menu.Items.Add(set_multy_screen);
+    ctx_menu.Items.Add(close_app);
+    
+    start_notif.ContextMenuStrip := ctx_menu;
     
     start_notif.ShowBalloonTip(Round(time / 1000));
     var t := new System.Timers.Timer(time);
     t.AutoReset := false;
     t.Elapsed += (o, e)-> begin
-      start_notif.Visible := false;
       t.Stop;
       t.Close;
       t.Dispose;
     end;
     t.Start;
-    
+    Application.Run(new ApplicationContext);
     while true do
     begin
       
