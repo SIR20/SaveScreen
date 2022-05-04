@@ -38,8 +38,20 @@ type
     
     public procedure ScreensSave(path: string);
     begin
-      Screens.ForEach((i, j) -> ScreenSave($'{path}\images{j}.jpg', i));
+      Screens.ForEach((i, j) -> ScreenSave(GetSuitableFilePath(path, j), i));
       Screens.ForEach(i -> begin i.Dispose end);
+    end;
+    
+    private function GetSuitableFilePath(path: string; j: integer): string;
+    begin
+      var i := j;
+      var screenPath := $'{path}\images{j}.jpg';
+      while &File.Exists(screenPath) do
+      begin
+        screenPath := $'{path}\images{j}.jpg';
+        j += 1;
+      end;
+      result := screenPath;
     end;
     
     public procedure ScreenSaveToMemory(im: Image) := Clipboard.SetImage(im);
