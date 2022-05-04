@@ -102,6 +102,7 @@ begin
   f.Text := 'Справка';
   f.StartPosition := FormStartPosition.CenterScreen;
   f.TopMost := true;
+  f.KeyPreview:=false;
   
   var label_4 := new TextBox;
   label_4.Left := 10;
@@ -412,7 +413,8 @@ begin
       var res := reg_save.GetValue('Open');
       if res = nil then
       begin
-        ShowHelper;
+        var helper_thread:= new Thread(ShowHelper);
+        helper_thread.Start;
         reg_save.SetValue('Open', true)
       end;
     except
